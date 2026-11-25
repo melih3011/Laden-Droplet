@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
+#ifdef USE_FFTW
+#include <fftw3.h>
+void fft_init(void);
+#endif
 
 #define pi 3.14159265358979323846
 #define pi_2 6.2831853071795864769  /* 2*pi */
@@ -329,7 +333,181 @@ void data_init() {
   init_matrix(lo2, wsw2, lwsw2);
   init_matrix(lo12, wsw12, lwsw12);
 
+#ifdef USE_FFTW
+  fft_init();
+#endif
+
 }
+
+#ifdef USE_FFTW
+/* ---------------------------------------------------------------------------
+ * FFT evaluation of the bulk convolutions (build with `make FFTW=1`).
+ *
+ * For grid points i >= n, with n the half width of a kernel, every sum in
+ * weighted_densities() and derivative() has the form
+ *     out[i] = sum_{m=-n..n} g[i-m] * K[n+m],      K = wm[2n][.],
+ * i.e. a linear convolution of g (e.g. r*rho(r)) with a fixed kernel row that
+ * already contains the end-point quadrature weights. These sums are computed
+ * with real-to-complex FFTs of length M >= N + 2*Rmax, so there is no
+ * wrap-around in the range that is used and the results equal the direct sums
+ * up to rounding. Points i < n keep their direct evaluation, because there the
+ * quadrature rows depend on i.
+ *
+ * Cost per functional evaluation: 9 forward and 12 inverse FFTs of length M,
+ * independent of the kernel widths (the direct sums cost N * kernel width).
+ * ------------------------------------------------------------------------- */
+
+enum { FFT_IN = 7, FFT_OUT = 10 };
+enum { K3_1, K2_1, K2V_1, K3_2, K2_2, K2V_2, KSW1, KSW2, KSW12, NKERNEL };
+/* outputs of fft_weighted() */
+enum { W_N3_1, W_N2_1, W_NV2_1, W_N3_2, W_N2_2, W_NV2_2, W_SW1, W_SW2, W_SW12, W_SW21 };
+/* outputs of fft_derivative() */
+enum { D_1, D_2 };
+
+static int M_fft, Mc_fft;
+static fftw_plan plan_r2c, plan_c2r;
+static double *fft_in[FFT_IN], *fft_out[FFT_OUT];
+static fftw_complex *fft_spec[FFT_IN], *fft_prod[FFT_OUT], *fft_kern[NKERNEL];
+
+/* Centre the kernel row wm[2n][.] at index 0 (negative offsets wrap around),
+ * fold in the 1/M normalisation of the inverse FFT and transform it. */
+static void fft_kernel(int id, int n, double wm[][2*n+1]) {
+
+  double *buf = fft_in[0];
+  int m;
+
+  for (m = 0; m < M_fft; m++) buf[m] = 0.0;
+  for (m = -n; m <= n; m++) buf[(m + M_fft) % M_fft] = wm[2*n][n+m] / M_fft;
+
+  fft_kern[id] = fftw_alloc_complex(Mc_fft);
+  fftw_execute_dft_r2c(plan_r2c, buf, fft_kern[id]);
+
+}
+
+void fft_init(void) {
+
+  int k, need = N + 2*Rmax + 1;
+
+  for (M_fft = 1; M_fft < need; M_fft *= 2);
+  Mc_fft = M_fft/2 + 1;
+
+  for (k = 0; k < FFT_IN; k++) {
+    fft_in[k] = fftw_alloc_real(M_fft);
+    fft_spec[k] = fftw_alloc_complex(Mc_fft);
+  }
+  for (k = 0; k < FFT_OUT; k++) {
+    fft_out[k] = fftw_alloc_real(M_fft);
+    fft_prod[k] = fftw_alloc_complex(Mc_fft);
+  }
+
+  /* Plans are single-threaded; independent transforms run in parallel below
+   * via the thread-safe new-array execute functions. */
+  plan_r2c = fftw_plan_dft_r2c_1d(M_fft, fft_in[0], fft_spec[0], FFTW_MEASURE);
+  plan_c2r = fftw_plan_dft_c2r_1d(M_fft, fft_prod[0], fft_out[0], FFTW_MEASURE);
+
+  fft_kernel(K3_1, R, w3);    fft_kernel(K2_1, R, w2);    fft_kernel(K2V_1, R, w2v);
+  fft_kernel(K3_2, R2, w32);  fft_kernel(K2_2, R2, w22);  fft_kernel(K2V_2, R2, w2v2);
+  fft_kernel(KSW1, lo1, wsw1);
+  fft_kernel(KSW2, lo2, wsw2);
+  fft_kernel(KSW12, lo12, wsw12);
+
+  printf("FFT convolutions enabled: M = %d\n", M_fft);
+
+}
+
+/* fft_in[slot][j] = a[j] (times r_j = j*dr if with_r) for j < nvalid, else 0 */
+static void fft_load(int slot, const double *a, int with_r, int nvalid) {
+
+  double *b = fft_in[slot];
+  int j;
+
+  #pragma omp parallel for
+  for (j = 0; j < M_fft; j++) b[j] = (j < nvalid) ? (with_r ? a[j]*(j*dr) : a[j]) : 0.0;
+
+}
+
+static void fft_forward(int nin) {
+
+  int s;
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for (s = 0; s < nin; s++) fftw_execute_dft_r2c(plan_r2c, fft_in[s], fft_spec[s]);
+
+}
+
+static void fft_backward(int nout) {
+
+  int o;
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for (o = 0; o < nout; o++) fftw_execute_dft_c2r(plan_c2r, fft_prod[o], fft_out[o]);
+
+}
+
+/* prod[o][k] (+)= (xr + i xi) * kern[K][k] */
+#define CMUL(o, xr, xi, K) \
+  fft_prod[o][k][0] = (xr)*fft_kern[K][k][0] - (xi)*fft_kern[K][k][1]; \
+  fft_prod[o][k][1] = (xr)*fft_kern[K][k][1] + (xi)*fft_kern[K][k][0];
+#define CMULADD(o, xr, xi, K) \
+  fft_prod[o][k][0] += (xr)*fft_kern[K][k][0] - (xi)*fft_kern[K][k][1]; \
+  fft_prod[o][k][1] += (xr)*fft_kern[K][k][1] + (xi)*fft_kern[K][k][0];
+
+/* Bulk sums of weighted_densities(): convolutions of r*rho1 and r*rho2. */
+static void fft_weighted(void) {
+
+  int k;
+
+  fft_load(0, rho1, 1, N);
+  fft_load(1, rho2, 1, N);
+  fft_forward(2);
+
+  #pragma omp parallel for
+  for (k = 0; k < Mc_fft; k++) {
+    const double ar = fft_spec[0][k][0], ai = fft_spec[0][k][1];
+    const double br = fft_spec[1][k][0], bi = fft_spec[1][k][1];
+    CMUL(W_N3_1, ar, ai, K3_1)  CMUL(W_N2_1, ar, ai, K2_1)  CMUL(W_NV2_1, ar, ai, K2V_1)
+    CMUL(W_N3_2, br, bi, K3_2)  CMUL(W_N2_2, br, bi, K2_2)  CMUL(W_NV2_2, br, bi, K2V_2)
+    CMUL(W_SW1, ar, ai, KSW1)   CMUL(W_SW2, br, bi, KSW2)
+    CMUL(W_SW12, br, bi, KSW12) CMUL(W_SW21, ar, ai, KSW12)
+  }
+
+  fft_backward(10);
+
+}
+
+/* Bulk sums of derivative(). The three sums per component are combined in
+ * Fourier space, e.g. for component 1
+ *   sum d3 r w3 + sum d2 r w2 + sum dv2 (w3 - r w2v)
+ *     = (d3 r + dv2) * w3 + (d2 r) * w2 - (dv2 r) * w2v.
+ * Inputs are only valid for j < nvalid and are zero-padded beyond. */
+static void fft_derivative(const double *d3, const double *d2, const double *dv2,
+                           const double *d22, const double *dv22, int nvalid) {
+
+  int k;
+
+  fft_load(0, d3, 1, nvalid);
+  fft_load(1, d2, 1, nvalid);
+  fft_load(2, dv2, 0, nvalid);
+  fft_load(3, dv2, 1, nvalid);
+  fft_load(4, d22, 1, nvalid);
+  fft_load(5, dv22, 0, nvalid);
+  fft_load(6, dv22, 1, nvalid);
+  fft_forward(7);
+
+  #pragma omp parallel for
+  for (k = 0; k < Mc_fft; k++) {
+    CMUL(D_1, fft_spec[0][k][0]+fft_spec[2][k][0], fft_spec[0][k][1]+fft_spec[2][k][1], K3_1)
+    CMULADD(D_1, fft_spec[1][k][0], fft_spec[1][k][1], K2_1)
+    CMULADD(D_1, -fft_spec[3][k][0], -fft_spec[3][k][1], K2V_1)
+    CMUL(D_2, fft_spec[0][k][0]+fft_spec[5][k][0], fft_spec[0][k][1]+fft_spec[5][k][1], K3_2)
+    CMULADD(D_2, fft_spec[4][k][0], fft_spec[4][k][1], K2_2)
+    CMULADD(D_2, -fft_spec[6][k][0], -fft_spec[6][k][1], K2V_2)
+  }
+
+  fft_backward(2);
+
+}
+#endif
 
 void weighted_densities() {
 
@@ -355,6 +533,10 @@ void weighted_densities() {
   nsw2[0] = -eps2*pi_4*fr2int(rho2, dr, lo2, 0.);
   nsw12[0] = -eps12*pi_4*fr2int(rho2, dr, lo12, 0.);
   nsw21[0] = -eps12*pi_4*fr2int(rho1, dr, lo12, 0.);
+
+#ifdef USE_FFTW
+  fft_weighted();
+#endif
 
 
   //1st component HS
@@ -400,6 +582,11 @@ void weighted_densities() {
     jp = i+R;
     jm = i-R;
 
+#ifdef USE_FFTW
+    n3i = fft_out[W_N3_1][i];
+    n2i = fft_out[W_N2_1][i];
+    nv2i = fft_out[W_NV2_1][i];
+#else
     #pragma omp simd reduction(+:n3i,n2i,nv2i)
     for (j = jm; j <= jp; j++) {
       const double hrho = rho1[j]*(j*dr);
@@ -407,6 +594,7 @@ void weighted_densities() {
       n2i += hrho*w2[jp-jm][R+i-j];
       nv2i += hrho*w2v[jp-jm][R+i-j];
     }
+#endif
 
     n1i = n2i/(pi_4*lR1);
     n0i = n1i/lR1;
@@ -463,6 +651,11 @@ void weighted_densities() {
     jp = i+R2;
     jm = i-R2;
 
+#ifdef USE_FFTW
+    m3i = fft_out[W_N3_2][i];
+    m2i = fft_out[W_N2_2][i];
+    mv2i = fft_out[W_NV2_2][i];
+#else
     #pragma omp simd reduction(+:m3i,m2i,mv2i)
     for (j = jm; j <= jp; j++) {
       const double hrho = rho2[j]*(j*dr);
@@ -470,6 +663,7 @@ void weighted_densities() {
       m2i += hrho*w22[jp-jm][R2+i-j];
       mv2i += hrho*w2v2[jp-jm][R2+i-j];
     }
+#endif
 
     m1i = m2i/(pi_4*lR2);
     m0i = m1i/lR2;
@@ -511,11 +705,15 @@ void weighted_densities() {
     jp = i+lo1;
     jm = i-lo1;
 
+#ifdef USE_FFTW
+    sw1 = fft_out[W_SW1][i];
+#else
     #pragma omp simd reduction(+:sw1)
     for (j = jm; j <= jp; j++) {
       const double hrho = rho1[j]*(j*dr);
       sw1 += hrho*wsw1[jp-jm][lo1+i-j];
     }
+#endif
 
     nsw1[i] += sw1/hr;
 
@@ -548,11 +746,15 @@ void weighted_densities() {
     jp = i+lo2;
     jm = i-lo2;
 
+#ifdef USE_FFTW
+    sw2 = fft_out[W_SW2][i];
+#else
     #pragma omp simd reduction(+:sw2)
     for (j = jm; j <= jp; j++) {
       const double hrho = rho2[j]*(j*dr);
       sw2 += hrho*wsw2[jp-jm][lo2+i-j];
     }
+#endif
 
     nsw2[i] += sw2/hr;
 
@@ -585,11 +787,16 @@ void weighted_densities() {
     jp = i+lo12;
     jm = i-lo12;
 
+#ifdef USE_FFTW
+    sw12 = fft_out[W_SW12][i];
+    sw21 = fft_out[W_SW21][i];
+#else
     #pragma omp simd reduction(+:sw12,sw21)
     for (j = jm; j <= jp; j++) {
       sw12 += rho2[j]*j*dr*wsw12[jp-jm][lo12+i-j];
       sw21 += rho1[j]*j*dr*wsw12[jp-jm][lo12+i-j];
     }
+#endif
 
     nsw12[i] += sw12/hr;
     nsw21[i] += sw21/hr;
@@ -622,6 +829,10 @@ void derivative() {
     dv22[i] = mydv2(ln0, ln1, ln2, ln3, lnv1, lnv2, lR2);
 
   }
+
+#ifdef USE_FFTW
+  fft_derivative(d3, d2, dv2, d22, dv22, N-2*Rmax);
+#endif
 
   dep[0] = pi_4*fr2int(d3, dr, R, 0.)+pi_4*pow(lR1, 2)*(d2[R]+dv2[R])+
            nsw1[0]+nsw12[0]-mu1l;
@@ -660,6 +871,9 @@ void derivative() {
     jp = i+R;
     jm = i-R;
 
+#ifdef USE_FFTW
+    c3i = fft_out[D_1][i];   /* all three sums combined */
+#else
     #pragma omp simd reduction(+:c3i,c2i,cv2i)
     for (j = jm; j <= jp; j++) {
       const double hrs = j*dr;
@@ -667,6 +881,7 @@ void derivative() {
       c2i += d2[j]*hrs*w2[jp-jm][(R+i)-j];
       cv2i += dv2[j]*(w3[jp-jm][(R+i)-j]-hrs*w2v[jp-jm][(R+i)-j]);
     }
+#endif
 
     dep[i] = (c3i+c2i+cv2i)/hr+nsw1[i]+nsw12[i]-mu1l;
     dphi[i] = dep[i]+log(rho1[i]/rho1l);
@@ -704,6 +919,9 @@ void derivative() {
     jp = i+R2;
     jm = i-R2;
 
+#ifdef USE_FFTW
+    e3i = fft_out[D_2][i];   /* all three sums combined */
+#else
     #pragma omp simd reduction(+:e3i,e2i,ev2i)
     for (j = jm; j <= jp; j++) {
       const double hrs = j*dr;
@@ -711,6 +929,7 @@ void derivative() {
       e2i += d22[j]*hrs*w22[jp-jm][(R2+i)-j];
       ev2i += dv22[j]*(w32[jp-jm][(R2+i)-j]-hrs*w2v2[jp-jm][(R2+i)-j]);
     }
+#endif
 
     dep2[i] = (e3i+e2i+ev2i)/hr+nsw2[i]+nsw21[i];
     dphi2[i] = dep2[i]+log(rho2[i]/rho02l);

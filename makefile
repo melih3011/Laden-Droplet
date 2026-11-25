@@ -1,6 +1,19 @@
 CC = gcc-mp-13
 CFLAGS = -O2 -fopenmp
-CLIBS = -lm 
+CLIBS = -lm
+
+# Optional FFT-based convolutions (requires FFTW 3), e.g.
+#   make FFTW=1                             FFTW in the compiler's default paths
+#   make FFTW=1 FFTW_PREFIX=/opt/homebrew   FFTW installed with Homebrew on Apple silicon
+# Run 'make clean' when switching between FFT and direct builds.
+ifdef FFTW
+CFLAGS += -DUSE_FFTW
+CLIBS := -lfftw3 $(CLIBS)
+ifdef FFTW_PREFIX
+CFLAGS += -I$(FFTW_PREFIX)/include
+CLIBS := -L$(FFTW_PREFIX)/lib $(CLIBS)
+endif
+endif
 
 OBJS = sp_one.o white_bear.o
 

@@ -230,6 +230,30 @@ Other targets:
 > interface with tensor weighted densities and still compile and link, but they are **not called
 > correctly** by the current solver and should be treated as work in progress.
 
+### Optional: FFT convolutions
+
+By default the weighted densities are computed as direct sums, which cost (grid size) × (kernel width).
+The kernels get wider with the size ratio, so large nanoparticles make every iteration slower. With
+[FFTW 3](https://www.fftw.org) installed, the bulk convolutions can be computed with FFTs instead, which
+makes the cost almost independent of the size ratio:
+
+```bash
+brew install fftw                                    # or: apt install libfftw3-dev
+make clean
+make CC=gcc-15 FFTW=1 FFTW_PREFIX=/opt/homebrew      # FFTW_PREFIX only if FFTW is not in the default paths
+```
+
+The program prints `FFT convolutions enabled` at start-up. The FFT reproduces the direct sums up to rounding
+(≈1e-14 relative), because it uses the same quadrature weights. Points within one kernel width of the centre
+are still summed directly. On a 10-core Apple M-series machine one functional evaluation takes:
+
+| Size ratio | Direct | FFT |
+|---|---|---|
+| 1:1 | 4.5 ms | 3.1 ms |
+| 10:1 | 14.2 ms | 3.6 ms |
+
+Run `make clean` when switching between FFT and direct builds.
+
 ### Setting model parameters
 
 Model parameters are **compile-time constants** at the top of `sp_one.c`. Edit them and rebuild:

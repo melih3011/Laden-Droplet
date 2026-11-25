@@ -362,15 +362,16 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R; i++) {
 
-    double hr = i*dr, hrho;
+    double hr = i*dr;
 
     double n3i = 0.0, n2i = 0.0, nv2i = 0.0, n0i, n1i, nv1i;
 
     jp = R+i;
     jm = R-i;
 
+    #pragma omp simd reduction(+:n3i,n2i,nv2i)
     for (j = jm; j <= jp; j++) {
-      hrho = rho1[j]*(j*dr);
+      const double hrho = rho1[j]*(j*dr);
       n3i += hrho*w3[jp-jm][R+i-j];
       n2i += hrho*w2[jp-jm][R+i-j];
       nv2i += hrho*w2v[jp-jm][R+i-j];
@@ -392,15 +393,16 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = R; i < N-Rmax; i++) {
 
-    double hr = i*dr, hrho;
+    double hr = i*dr;
 
     double n3i = 0.0, n2i = 0.0, nv2i = 0.0, n0i, n1i, nv1i;
 
     jp = i+R;
     jm = i-R;
 
+    #pragma omp simd reduction(+:n3i,n2i,nv2i)
     for (j = jm; j <= jp; j++) {
-      hrho = rho1[j]*(j*dr);
+      const double hrho = rho1[j]*(j*dr);
       n3i += hrho*w3[jp-jm][R+i-j];
       n2i += hrho*w2[jp-jm][R+i-j];
       nv2i += hrho*w2v[jp-jm][R+i-j];
@@ -425,14 +427,15 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R2; i++) {
 
-    double hr = i*dr, hrho;
+    double hr = i*dr;
     double m3i = 0.0, m2i = 0.0, mv2i = 0.0, m0i, m1i, mv1i;
 
     jp = R2+i;
     jm = R2-i;
 
+    #pragma omp simd reduction(+:m3i,m2i,mv2i)
     for (j = jm; j <= jp; j++) {
-      hrho = rho2[j]*(j*dr);
+      const double hrho = rho2[j]*(j*dr);
       m3i += hrho*w32[jp-jm][R2+i-j];
       m2i += hrho*w22[jp-jm][R2+i-j];
       mv2i += hrho*w2v2[jp-jm][R2+i-j];
@@ -454,14 +457,15 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = R2; i < N-Rmax; i++) {
 
-    double hr = i*dr, hrho;
+    double hr = i*dr;
     double m3i = 0.0, m2i = 0.0, mv2i = 0.0, m0i, m1i, mv1i;
 
     jp = i+R2;
     jm = i-R2;
 
+    #pragma omp simd reduction(+:m3i,m2i,mv2i)
     for (j = jm; j <= jp; j++) {
-      hrho = rho2[j]*(j*dr);
+      const double hrho = rho2[j]*(j*dr);
       m3i += hrho*w32[jp-jm][R2+i-j];
       m2i += hrho*w22[jp-jm][R2+i-j];
       mv2i += hrho*w2v2[jp-jm][R2+i-j];
@@ -484,13 +488,14 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i=1; i<lo1; i++) {
 
-    double sw1 = 0.0, hr=i*dr, hrho;
+    double sw1 = 0.0, hr=i*dr;
 
     jp = lo1+i;
     jm = lo1-i;
 
+    #pragma omp simd reduction(+:sw1)
     for (j = jm; j <= jp; j++) {
-      hrho = rho1[j]*(j*dr);
+      const double hrho = rho1[j]*(j*dr);
       sw1 += hrho*wsw1[jp-jm][lo1+i-j];
     }
 
@@ -501,13 +506,14 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i=lo1; i<N-Rmax; i++) {
 
-    double sw1 = 0.0, hr=i*dr, hrho;
+    double sw1 = 0.0, hr=i*dr;
 
     jp = i+lo1;
     jm = i-lo1;
 
+    #pragma omp simd reduction(+:sw1)
     for (j = jm; j <= jp; j++) {
-      hrho = rho1[j]*(j*dr);
+      const double hrho = rho1[j]*(j*dr);
       sw1 += hrho*wsw1[jp-jm][lo1+i-j];
     }
 
@@ -519,13 +525,14 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i=1; i<lo2; i++) {
 
-    double sw2 = 0.0, hr=i*dr, hrho;
+    double sw2 = 0.0, hr=i*dr;
 
     jp = lo2+i;
     jm = lo2-i;
 
+    #pragma omp simd reduction(+:sw2)
     for (j = jm; j <= jp; j++) {
-      hrho = rho2[j]*(j*dr);
+      const double hrho = rho2[j]*(j*dr);
       sw2 += hrho*wsw2[jp-jm][lo2+i-j];
     }
 
@@ -536,13 +543,14 @@ void weighted_densities() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i=lo2; i<N-Rmax; i++) {
 
-    double sw2 = 0.0, hr=i*dr, hrho;
+    double sw2 = 0.0, hr=i*dr;
 
     jp = i+lo2;
     jm = i-lo2;
 
+    #pragma omp simd reduction(+:sw2)
     for (j = jm; j <= jp; j++) {
-      hrho = rho2[j]*(j*dr);
+      const double hrho = rho2[j]*(j*dr);
       sw2 += hrho*wsw2[jp-jm][lo2+i-j];
     }
 
@@ -558,6 +566,7 @@ void weighted_densities() {
     jp = lo12+i;
     jm = lo12-i;
 
+    #pragma omp simd reduction(+:sw12,sw21)
     for (j = jm; j <= jp; j++) {
       sw12 += rho2[j]*j*dr*wsw12[jp-jm][lo12+i-j];
       sw21 += rho1[j]*j*dr*wsw12[jp-jm][lo12+i-j];
@@ -576,6 +585,7 @@ void weighted_densities() {
     jp = i+lo12;
     jm = i-lo12;
 
+    #pragma omp simd reduction(+:sw12,sw21)
     for (j = jm; j <= jp; j++) {
       sw12 += rho2[j]*j*dr*wsw12[jp-jm][lo12+i-j];
       sw21 += rho1[j]*j*dr*wsw12[jp-jm][lo12+i-j];
@@ -622,14 +632,15 @@ void derivative() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R; i++) {
 
-    double hr = i*dr, hrs;
+    double hr = i*dr;
     double c3i = 0.0, c2i = 0.0, cv2i = 0.0;
 
     jp = R+i;
     jm = R-i;
 
+    #pragma omp simd reduction(+:c3i,c2i,cv2i)
     for (j = jm; j <= jp; j++) {
-      hrs = j*dr;
+      const double hrs = j*dr;
       c3i += d3[j]*hrs*w3[jp-jm][(R+i)-j];
       c2i += d2[j]*hrs*w2[jp-jm][(R+i)-j];
       cv2i += dv2[j]*(w3[jp-jm][(R+i)-j]-hrs*w2v[jp-jm][(R+i)-j]);
@@ -643,14 +654,15 @@ void derivative() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = R; i < N-2*Rmax; i++) {
 
-    double hr = i*dr, hrs;
+    double hr = i*dr;
     double c3i = 0.0, c2i = 0.0, cv2i = 0.0;
 
     jp = i+R;
     jm = i-R;
 
+    #pragma omp simd reduction(+:c3i,c2i,cv2i)
     for (j = jm; j <= jp; j++) {
-      hrs = j*dr;
+      const double hrs = j*dr;
       c3i += d3[j]*hrs*w3[jp-jm][(R+i)-j];
       c2i += d2[j]*hrs*w2[jp-jm][(R+i)-j];
       cv2i += dv2[j]*(w3[jp-jm][(R+i)-j]-hrs*w2v[jp-jm][(R+i)-j]);
@@ -664,14 +676,15 @@ void derivative() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R2; i++) {
 
-    double hr = i*dr, hrs;
+    double hr = i*dr;
     double e3i = 0.0, e2i = 0.0, ev2i = 0.0;
 
     jp = R2+i;
     jm = R2-i;
 
+    #pragma omp simd reduction(+:e3i,e2i,ev2i)
     for (j = jm; j <= jp; j++) {
-      hrs = j*dr;
+      const double hrs = j*dr;
       e3i += d3[j]*hrs*w32[jp-jm][(R2+i)-j];
       e2i += d22[j]*hrs*w22[jp-jm][(R2+i)-j];
       ev2i += dv22[j]*(w32[jp-jm][(R2+i)-j]-hrs*w2v2[jp-jm][(R2+i)-j]);
@@ -685,14 +698,15 @@ void derivative() {
   #pragma omp parallel for private(i, j, jm, jp)
   for (i = R2; i < N-Rmax; i++) {
 
-    double hr = i*dr, hrs;
+    double hr = i*dr;
     double e3i = 0.0, e2i = 0.0, ev2i = 0.0;
 
     jp = i+R2;
     jm = i-R2;
 
+    #pragma omp simd reduction(+:e3i,e2i,ev2i)
     for (j = jm; j <= jp; j++) {
-      hrs = j*dr;
+      const double hrs = j*dr;
       e3i += d3[j]*hrs*w32[jp-jm][(R2+i)-j];
       e2i += d22[j]*hrs*w22[jp-jm][(R2+i)-j];
       ev2i += dv22[j]*(w32[jp-jm][(R2+i)-j]-hrs*w2v2[jp-jm][(R2+i)-j]);
@@ -1031,7 +1045,7 @@ void minimize_ng(double accuracy) {
 
     if (j < 500) {
       #pragma omp parallel for private(i)
-      for (i = 1; i < N-3*Rmax; i++) {
+      for (i = 0; i < N-3*Rmax; i++) {
         
         rho1_old[i] = rho1[i];
         rho2_old[i] = rho2[i];

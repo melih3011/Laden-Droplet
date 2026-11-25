@@ -44,3 +44,6 @@ liquid_*.txt
 *.png
 *.pdf
 *.ps
+
+# ...except the figures shown in README.md
+!docs/figures/*.png

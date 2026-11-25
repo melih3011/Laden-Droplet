@@ -12,6 +12,13 @@ This is the code behind
 which extends the lattice-DFT study of A. J. Archer, B. D. Goddard and R. Roth,
 J. Chem. Phys. **159**, 194503 (2023), to continuum DFT.
 
+<p align="center">
+  <img src="docs/figures/density_10_to_1.png" width="85%"
+       alt="Radial density profiles of solvent and nanoparticles in a 10:1 laden droplet, with 2D heatmaps showing concentric shells">
+</p>
+<p align="center"><sub>Solvent (left) and nanoparticle (right) density profiles of a stable 10:1 droplet at 50–80 % relative humidity.
+See <a href="#results">Results</a>.</sub></p>
+
 ---
 
 ## Theoretical background
@@ -43,7 +50,7 @@ $$
 $$
 
 where component 1 is the **liquid/solvent** ($l$) and component 2 the **nanoparticles** ($n$). The size
-ratio is $q = \sigma_l/\sigma_n$ (a "10:1 droplet" has $\sigma_n = 10\,\sigma_l$). The cross-interaction range
+ratio is $q = \sigma_l/\sigma_n$ (a "10:1 droplet" has $\sigma_n = 10\sigma_l$). The cross-interaction range
 follows the Lorentz mixing rule $\lambda_{ln} = (\lambda_{ll}\sigma_l + \lambda_{nn}\sigma_n)/(\sigma_l + \sigma_n)$;
 the cross-interaction strength $\varepsilon_{ln}$ can be chosen freely or via $\varepsilon_{ln} = \sqrt{\varepsilon_{ll}\varepsilon_{nn}}$.
 
@@ -53,7 +60,7 @@ The Helmholtz free-energy functional is split into an exact ideal-gas part, a ha
 
 $$
 F_\mathrm{ex}[\rho_l,\rho_n] = F_\mathrm{hs}[\rho_l,\rho_n]
-+ \tfrac12 \sum_{i,j} \iint \rho_i(\mathbf r)\,\rho_j(\mathbf r')\,\phi^{(ij)}_\mathrm{sw}(|\mathbf r-\mathbf r'|)\,d\mathbf r\,d\mathbf r' .
++ \frac{1}{2} \sum_{i,j} \iint \rho_i(\mathbf{r}) \rho_j(\mathbf{r}') \phi^{(ij)}_\mathrm{sw}(|\mathbf{r}-\mathbf{r}'|) d\mathbf{r} d\mathbf{r}' .
 $$
 
 With $\beta\varepsilon_{ll} = 1.2$ and $\lambda_{ll} = 1.5$ the pure SW fluid has liquid–vapour coexistence at
@@ -66,12 +73,12 @@ relative humidity of the environment,
 
 $$H_r = 100 \times \frac{P(\mu_0)}{P(\mu_c)} .$$
 
-The nanoparticles are non-volatile and are treated **canonically**, i.e. their number $N_n = \int \rho_n\,d\mathbf r$
+The nanoparticles are non-volatile and are treated **canonically**, i.e. their number $N_n = \int \rho_n(\mathbf{r}) d\mathbf{r}$
 is held fixed. Minimising the grand potential under this constraint yields the Euler–Lagrange equations
 
 $$
-\rho_l(r) = \rho_l^{(0)} \exp\!\big(c_l^{(1)}(r) + \beta\mu_l\big), \qquad
-\rho_n(r) = \rho_n^{(0)} \exp\!\big(c_n^{(1)}(r)\big),
+\rho_l(r) = \rho_l^{(0)} \exp\left(c_l^{(1)}(r) + \beta\mu_l\right), \qquad
+\rho_n(r) = \rho_n^{(0)} \exp\left(c_n^{(1)}(r)\right),
 $$
 
 with the one-body direct correlation functions $c_i^{(1)} = -\delta\beta F_\mathrm{ex}/\delta\rho_i$.
@@ -88,10 +95,54 @@ $\exp(c_n^{(1)})$ grows very large. The solver therefore uses four stages (Sec. 
 2. **Liquid only.** $\rho_l$ is relaxed in the fixed background of $\rho_n$, starting from a step profile
    (liquid density inside, vapour density outside).
 3. **Coupled Picard iteration** with mixing parameters $\alpha_l$ and
-   $\alpha_n = \tilde\alpha_n \exp(-\lVert c_n^{(1)} \rVert_\mathrm{max})$.
+   $\alpha_n = \tilde\alpha_n \exp(-\max_r |c_n^{(1)}(r)|)$.
 4. **Ng acceleration** (K.-C. Ng, J. Chem. Phys. **61**, 2680 (1974)) until convergence.
 
 After every update $\rho_n$ is rescaled to keep $N_n$ fixed.
+
+---
+
+## Results
+
+A few results from the paper, computed with this code. In the density plots the colours denote the relative
+humidity: $H_r$ = 50% (red), 60% (green), 70% (orange) and 80% (blue). The insets show 2D cuts through the droplet
+at $H_r$ = 50%.
+
+### 2:1 droplet
+
+<p align="center"><img src="docs/figures/density_2_to_1.png" width="90%"
+  alt="Density profiles of a 2:1 laden droplet for relative humidities from 50 to 80 percent"></p>
+
+Solvent density $\rho_l(r)$ (left) and nanoparticle density $\rho_n(r)$ (right) for a 2:1 droplet
+($\beta\varepsilon_{nn} = 0$, $\beta\varepsilon_{ln} = 3.78$, $\lambda_{nn} = 1.01$, $N_n$ = 92 281; paper Fig. 3).
+The droplet is stable at all humidities, with radius $R \approx 80\sigma_l$ at $H_r$ = 50%, and grows as the
+humidity increases. The nanoparticles accumulate at the liquid–vapour interface.
+
+### 10:1 droplet
+
+<p align="center"><img src="docs/figures/density_10_to_1.png" width="90%"
+  alt="Density profiles of a 10:1 laden droplet for relative humidities from 50 to 80 percent"></p>
+
+The same for a 10:1 droplet ($\beta\varepsilon_{ln} = 3.69$, $N_n$ = 1983; paper Fig. 4), the case closer to
+viruses suspended in water droplets. The nanoparticle profiles are offset vertically for clarity (light blue
+baselines). Under the strong spherical confinement, both solvent and nanoparticles order into concentric shells.
+
+### Droplet size and comparison with the thermodynamic model
+
+<p align="center">
+  <img src="docs/figures/radius_vs_Nn.png" width="48%"
+       alt="Equilibrium droplet radius versus number of nanoparticles for several humidities">
+  <img src="docs/figures/liquid_number_10_to_1.png" width="48%"
+       alt="Number of liquid particles in the 10:1 droplet versus humidity, DFT compared with the thermodynamic model">
+</p>
+
+**Left:** equilibrium radius $R$ of the 10:1 droplet as a function of the number of nanoparticles $N_n$
+(inset: number of liquid particles $N_l$; paper Fig. 5). More nanoparticles stabilise a larger droplet.
+**Right:** number of liquid particles $N_l$ in the 10:1 droplet versus humidity. The DFT results (symbols) agree
+closely with the simple thermodynamic model based on mechanical and chemical equilibrium (lines), both without and
+with the energy mixing rule $\varepsilon_{ln} = \sqrt{\varepsilon_{ll}\varepsilon_{nn}}$ (paper Fig. 8).
+
+<sub>Figures from M. Gül *et al.*, J. Chem. Phys. **163**, 114111 (2025), [doi:10.1063/5.0292718](https://doi.org/10.1063/5.0292718).</sub>
 
 ---
 
@@ -151,9 +202,9 @@ Model parameters are **compile-time constants** at the top of `sp_one.c`. Edit t
 
 | Macro | Meaning |
 |---|---|
-| `R` | Grid points per solvent hard-sphere radius (grid spacing $\Delta r = \sigma_l / 2R$) |
-| `R2` | Grid points per nanoparticle radius; the size ratio is $q = $ `R/R2` (e.g. `R2 = 10*R` for a 10:1 droplet) |
-| `N` | Number of grid points; system radius $R_m = $ `N/(2R)` $\sigma_l$ |
+| `R` | Grid points per solvent hard-sphere radius (grid spacing $\Delta r = \sigma_l/(2R)$) |
+| `R2` | Grid points per nanoparticle radius; the size ratio is $q = \sigma_l/\sigma_n$ = `R/R2` (e.g. `R2 = 10*R` for a 10:1 droplet) |
+| `N` | Number of grid points; system radius $R_m$ = `N/(2R)` in units of $\sigma_l$ |
 | `eps1`, `lam1` | $\beta\varepsilon_{ll}$, $\lambda_{ll}$ (solvent–solvent) |
 | `eps2`, `lam2` | $\beta\varepsilon_{nn}$, $\lambda_{nn}$ (nanoparticle–nanoparticle) |
 | `eps12` | $\beta\varepsilon_{ln}$ (solvent–nanoparticle); $\lambda_{ln}$ follows from the mixing rule |
@@ -182,8 +233,8 @@ mkdir -p temp
 | `fac` | Prefactor $\tilde\alpha_n$ of the nanoparticle mixing parameter (typically `0.01`–`0.1`) |
 | `mu` | *(optional)* Solvent chemical potential $\beta\mu_0$, i.e. the humidity. Obtain it from `humid_chemPot.nb`; otherwise the default in `param_init()` is used. |
 
-For $\beta\varepsilon_{ll} = 1.2$, $\lambda_{ll} = 1.5$, for example, $H_r = 80\%,\,50\%,\,30\%$ correspond to
-$\beta\mu_0 = -5.4902,\,-5.9402,\,-6.4374$:
+For $\beta\varepsilon_{ll} = 1.2$, $\lambda_{ll} = 1.5$, for example, $H_r$ = 80%, 50% and 30% correspond to
+$\beta\mu_0$ = −5.4902, −5.9402 and −6.4374:
 
 ```bash
 ./spone_wb 80 0.1 0.01 -5.9402     # droplet at H_r = 50 %

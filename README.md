@@ -219,12 +219,16 @@ limit (e.g. `ulimit -s unlimited` on Linux, or `ulimit -s 65532` on macOS).
 
 ## Running
 
-The solver writes intermediate profiles to `./temp/`, so create that directory first:
+While running, the solver writes the current profiles to `temp/temp.dat` every `PRINT_EVERY` iterations
+(default 100, set in `sp_one.c`) so you can monitor convergence. Create that directory first:
 
 ```bash
 mkdir -p temp
 ./spone_wb Rb a1 fac [mu]
 ```
+
+The solver uses all available cores by default. Set `OMP_NUM_THREADS` to control this, e.g.
+`OMP_NUM_THREADS=8 ./spone_wb …`.
 
 | Argument | Meaning |
 |---|---|

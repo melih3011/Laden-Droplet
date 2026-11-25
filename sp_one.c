@@ -47,6 +47,8 @@
 
 #define Nn 992513
 
+#define PRINT_EVERY 100  /* write temp/temp.dat every PRINT_EVERY iterations */
+
 double rho02l;
 
 int Rb, Rn;
@@ -91,12 +93,12 @@ int get_radius(const double *arr, int mode) {
     tol = 1.e-3;
     mid = 1./3.*arr[0]+2./3.*arr[N-5*Rmax];
 
-    while (fabs(arr[rad]-mid) > tol) rad++;
-  
+    while (rad < N-5*Rmax && fabs(arr[rad]-mid) > tol) rad++;
+
   } else if (mode == 1) {
 
     tol = 1.e-6;
-    while (fabs(arr[rad]-arr[N-5*Rmax]) > tol) rad++;
+    while (rad < N-5*Rmax && fabs(arr[rad]-arr[N-5*Rmax]) > tol) rad++;
   
   } else exit(-1);
 
@@ -149,22 +151,30 @@ void print_results() {
 
 }
 
+/* Write the current profiles to temp/temp.dat for monitoring a running minimisation.
+ * The file is written under a temporary name and renamed, so readers never see a
+ * half-written file, and no shell is spawned. Call it only every PRINT_EVERY iterations:
+ * formatting the full profile costs more than a functional evaluation. */
 void print_file(int j) {
 
-  void filename(char *fln);
-  char fln[250], command[300];
+  static int warned = 0;
+  const char *tmp = "temp/temp.dat.part", *fln = "temp/temp.dat";
 
-  sprintf(fln, "temp.dat");
-  fp = fopen(fln, "w");
+  (void)j;
+
+  fp = fopen(tmp, "w");
+  if (fp == NULL) {
+    if (!warned) fprintf(stderr, "\nWarning: cannot write %s (does ./temp exist?)\n", tmp);
+    warned = 1;
+    return;
+  }
 
   for (int i = 0; i < N-5*Rmax; i++) {
     fprintf(fp, "%10.5lf  %.10e %.10e %.10e %.10e\n", i*dr/2., rho1[i], rho2[i], dphi[i], exp(-dep2[i]));
   }
 
   fclose(fp);
-
-  sprintf(command, "mv %s ./temp", fln);
-  system(command);
+  rename(tmp, fln);
 
 }
 
@@ -349,7 +359,7 @@ void weighted_densities() {
 
   //1st component HS
   //=======================================================================
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R; i++) {
 
     double hr = i*dr, hrho;
@@ -379,7 +389,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = R; i < N-Rmax; i++) {
 
     double hr = i*dr, hrho;
@@ -412,7 +422,7 @@ void weighted_densities() {
 
   //2nd component HS
   //=======================================================================
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R2; i++) {
 
     double hr = i*dr, hrho;
@@ -441,7 +451,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = R2; i < N-Rmax; i++) {
 
     double hr = i*dr, hrho;
@@ -471,7 +481,7 @@ void weighted_densities() {
   }
   //=======================================================================
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=1; i<lo1; i++) {
 
     double sw1 = 0.0, hr=i*dr, hrho;
@@ -488,7 +498,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=lo1; i<N-Rmax; i++) {
 
     double sw1 = 0.0, hr=i*dr, hrho;
@@ -506,7 +516,7 @@ void weighted_densities() {
   }
 
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=1; i<lo2; i++) {
 
     double sw2 = 0.0, hr=i*dr, hrho;
@@ -523,7 +533,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=lo2; i<N-Rmax; i++) {
 
     double sw2 = 0.0, hr=i*dr, hrho;
@@ -540,7 +550,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=1; i<lo12; i++) {
 
     double sw12 = 0.0, sw21 = 0.0, hr=i*dr;
@@ -558,7 +568,7 @@ void weighted_densities() {
 
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i=lo12; i<N-Rmax; i++) {
 
     double sw12 = 0.0, sw21 = 0.0, hr=i*dr;
@@ -588,7 +598,7 @@ void derivative() {
   double d2[N], d22[N], d3[N], dv2[N], dv22[N];
   double lR1 = R*dr, lR2 = R2*dr;
 
-  #pragma omp parallel for private(i) num_threads(4)
+  #pragma omp parallel for private(i)
   for (i = 0; i < N-2*Rmax; i++) {
 
     double ln3 = n3[i], ln2 = n2[i], ln1 = n1[i];
@@ -609,7 +619,7 @@ void derivative() {
   dep2[0] = pi_4*fr2int(d3, dr, R2, 0.)+pi_4*pow(lR2, 2)*(d22[R2]+dv22[R2])+
             nsw2[0]+nsw21[0];
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R; i++) {
 
     double hr = i*dr, hrs;
@@ -630,7 +640,7 @@ void derivative() {
 
   }
     
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = R; i < N-2*Rmax; i++) {
 
     double hr = i*dr, hrs;
@@ -651,7 +661,7 @@ void derivative() {
 
   }    
     
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = 1; i < R2; i++) {
 
     double hr = i*dr, hrs;
@@ -672,7 +682,7 @@ void derivative() {
     
   }
 
-  #pragma omp parallel for private(i, j, jm, jp) num_threads(4)
+  #pragma omp parallel for private(i, j, jm, jp)
   for (i = R2; i < N-Rmax; i++) {
 
     double hr = i*dr, hrs;
@@ -746,7 +756,6 @@ void minimize() {
 
     c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0);
 
-    #pragma parallel for reduction (+:hw)
     for (i = 0; i < N-3*Rmax; ++i) {
       rho2[i] *= (double)Nn/c;
       hw += 0.5*(rho1_old[i]-rho1[i])*(rho1_old[i]-rho1[i])+0.5*(rho2_old[i]-rho2[i])*(rho2_old[i]-rho2[i]);
@@ -755,7 +764,7 @@ void minimize() {
     dN = (double)Nn-pi_4*fr2int(rho2, dr, N-3*Rmax, 0.);
     magn = pi_4*get_magnitude(rho1)/3.;
 
-    print_file(j);
+    if (j%PRINT_EVERY == 0) print_file(j);
 
     printf("\r%.2f %% ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 100.*j/ITS, get_magnitude(dphi),
      fabs(hw-hw_old), magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);
@@ -775,7 +784,7 @@ void minimize_eff(double x, double b) {
   double hw = 0.0, hw_old = 1.0, hw_eps, c, dN, magn, a, q, rl=Rb*dr, rn=Rn*dr;
   double c1, c2, a11, a22, a12, a01, a02, hr, dphi_max, dphi2_max;
   double rho1_old[N], rho2_old[N], rhon1[3][N], rhon2[3][N], dn1[3][N], dn2[3][N], d01[N], d02[N];
-  int i, j = 0, k, ITS = 10000, ITS_picard = 1000, xi = (int)(x/dr);
+  int i, j = 0, k, ITS = 10000, ITS_picard = 1000, ITS_ng = 250000, xi = (int)(x/dr);
   
   q = (double)(R*dr/(R2*dr));
   a = -eps12*rho02l*rho1l*pow(lam1*q+lam2, 3)*pi_4/3.*pow(R*dr, 3)*pi_4/3.*pow(R2*dr, 3);
@@ -804,7 +813,6 @@ void minimize_eff(double x, double b) {
       rho2[i] = (1.-0.1)*rho2[i]+0.1*rho02l*exp(-dep2[i]-Vext[i]);
     }
     c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0);
-    #pragma parallel for reduction (+:hw)
     for (i = 0; i < N-3*Rmax; ++i) {
       rho2[i] *= (double)Nn/c;
       hw += (rho2_old[i]-rho2[i])*(rho2_old[i]-rho2[i]);
@@ -832,7 +840,6 @@ void minimize_eff(double x, double b) {
       rho1_old[i] = rho1[i];
       rho1[i] = (1.-0.1)*rho1[i]+0.1*rho1l*exp(-dep[i]);
     }
-    #pragma parallel for reduction (+:hw)
     for (i = 0; i < N-3*Rmax; ++i) {
       hw += (rho1_old[i]-rho1[i])*(rho1_old[i]-rho1[i]);
     }    
@@ -873,7 +880,6 @@ void minimize_eff(double x, double b) {
 
     c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0);
 
-    #pragma parallel for reduction (+:hw)
     for (i = 0; i < N-3*Rmax; ++i) {
       rho2[i] *= (double)Nn/c;
       hw += 0.5*(rho1_old[i]-rho1[i])*(rho1_old[i]-rho1[i])+0.5*(rho2_old[i]-rho2[i])*(rho2_old[i]-rho2[i]);
@@ -898,7 +904,7 @@ void minimize_eff(double x, double b) {
   //============================================================
   printf("Starting Ng-algorithm\n"); 
 
-  while ((fabs(hw-hw_old) > hw_eps) && (j < 250000)) {
+  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS_ng)) {
 
     
     hw_old = hw;
@@ -921,7 +927,6 @@ void minimize_eff(double x, double b) {
       }
       
       c = pi_4*fr2int(rhon2[k], dr, N-3*Rmax, 0.0); 
-      #pragma parallel for num_threads(4)
       for (i = 0; i < N-3*Rmax; ++i) rhon2[k][i] *= (double)Nn/c;
 
       #pragma omp parallel for private(i)
@@ -947,8 +952,8 @@ void minimize_eff(double x, double b) {
       hw += 0.5*sprod(dn1[0], dn1[0]);
 
       hr = a12*a12 - a11*a22;
-      c1 = (a02*a12 - a01*a22)/hr;
-      c2 = (a01*a12 - a02*a11)/hr;
+      c1 = (hr != 0.) ? (a02*a12 - a01*a22)/hr : 0.;
+      c2 = (hr != 0.) ? (a01*a12 - a02*a11)/hr : 0.;
 
       for (i=0; i<N-3*Rmax; i++) {
         rho1[i] = (1.-c1-c2)*rhon1[0][i] + c1*rhon1[1][i] + c2*rhon1[2][i];
@@ -968,15 +973,14 @@ void minimize_eff(double x, double b) {
       hw += 0.5*sprod(dn2[0], dn2[0]);
       
       hr = a12*a12 - a11*a22;
-      c1 = (a02*a12 - a01*a22)/hr;
-      c2 = (a01*a12 - a02*a11)/hr;
+      c1 = (hr != 0.) ? (a02*a12 - a01*a22)/hr : 0.;
+      c2 = (hr != 0.) ? (a01*a12 - a02*a11)/hr : 0.;
 
       for (i=0; i<N-3*Rmax; i++) {
         rho2[i] = (1.-c1-c2)*rhon2[0][i] + c1*rhon2[1][i] + c2*rhon2[2][i];
       }
       
       c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0); 
-      #pragma parallel for
       for (i = 0; i < N-3*Rmax; ++i) rho2[i] *= (double)Nn/c;
 
       magn = get_magnitude(n3);
@@ -984,20 +988,21 @@ void minimize_eff(double x, double b) {
       rl = get_radius(rho1, 1)*dr;
       rn = get_radius(rho2, 1)*dr;
 
-      if (j%100 == 0) print_file(j);
+      if (j%PRINT_EVERY == 0) print_file(j);
 
       ++j;
 
       printf("\r%.2f %% ... %.2e ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 
-	100.*j/250000, dphi_max, dphi2_max, (hw-hw_old), magn, 0.5*rl, 0.5*rn, pi_4*fr2int(rho2, dr, (int)(rn/dr), 0.)/Nn);
+	100.*j/ITS_ng, dphi_max, dphi2_max, (hw-hw_old), magn, 0.5*rl, 0.5*rn, pi_4*fr2int(rho2, dr, (int)(rn/dr), 0.)/Nn);
       fflush(stdout);
     
   }
 
+  dN = (double)Nn-pi_4*fr2int(rho2, dr, N-3*Rmax, 0.);
 
   printf("\ndOm/drho=%.3e, dN=%.3e\n", dphi_max, dN);
 
-  if (j >= ITS_picard) printf("Exceeded maximum number of iterations.\n");
+  if (j >= ITS_ng) printf("Exceeded maximum number of iterations.\n");
   else printf("Did %d iterations\n", j);
 
 }
@@ -1040,7 +1045,6 @@ void minimize_ng(double accuracy) {
       }
       
       c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0);
-      #pragma parallel for reduction (+:hw)
       for (i = 0; i < N-3*Rmax; ++i) {
         rho2[i] *= (double)Nn/c;
         hw += 0.5*(rho1_old[i]-rho1[i])*(rho1_old[i]-rho1[i])+0.5*(rho2_old[i]-rho2[i])*(rho2_old[i]-rho2[i]);
@@ -1061,7 +1065,6 @@ void minimize_ng(double accuracy) {
         }
         
         c = pi_4*fr2int(rhon2[k], dr, N-3*Rmax, 0.0); 
-        #pragma parallel for num_threads(4)
         for (i = 0; i < N-3*Rmax; ++i) rhon2[k][i] *= (double)Nn/c;
 
         #pragma omp parallel for private(i)
@@ -1087,8 +1090,8 @@ void minimize_ng(double accuracy) {
         hw2 += 0.5*sprod(dn1[0], dn1[0]);
 
         hr = a12*a12 - a11*a22;
-        c1 = (a02*a12 - a01*a22)/hr;
-        c2 = (a01*a12 - a02*a11)/hr;
+        c1 = (hr != 0.) ? (a02*a12 - a01*a22)/hr : 0.;
+        c2 = (hr != 0.) ? (a01*a12 - a02*a11)/hr : 0.;
 
         for (i=0; i<N-3*Rmax; i++) {
           rho1[i] = (1.-c1-c2)*rhon1[0][i] + c1*rhon1[1][i] + c2*rhon1[2][i];
@@ -1108,15 +1111,14 @@ void minimize_ng(double accuracy) {
         hw2 += 0.5*sprod(dn2[0], dn2[0]);
         
         hr = a12*a12 - a11*a22;
-        c1 = (a02*a12 - a01*a22)/hr;
-        c2 = (a01*a12 - a02*a11)/hr;
+        c1 = (hr != 0.) ? (a02*a12 - a01*a22)/hr : 0.;
+        c2 = (hr != 0.) ? (a01*a12 - a02*a11)/hr : 0.;
 
         for (i=0; i<N-3*Rmax; i++) {
           rho2[i] = (1.-c1-c2)*rhon2[0][i] + c1*rhon2[1][i] + c2*rhon2[2][i];
         }
         
         c = pi_4*fr2int(rho2, dr, N-3*Rmax, 0.0); 
-        #pragma parallel for
         for (i = 0; i < N-3*Rmax; ++i) rho2[i] *= (double)Nn/c;
 
     }
@@ -1125,7 +1127,7 @@ void minimize_ng(double accuracy) {
     dN = ((double)Nn-pi_4*fr2int(rho2, dr, N-3*Rmax, 0.))/Nn;
     magn = pi_4*get_magnitude(rho1)/3.;
 
-    print_file(j);
+    if (j%PRINT_EVERY == 0) print_file(j);
 
     printf("\r%.2f %% ... %.2e ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 100.*j/ITS, dphi_max, dphi2_max,
      fabs(hw-hw_old)+fabs(hw2-hw_old2), magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);

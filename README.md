@@ -34,7 +34,7 @@ so mechanical equilibrium cannot be reached and the droplet evaporates – faste
 If non-volatile nanoparticles (solutes, virions, …) are dissolved in the droplet, their attraction to the
 liquid lowers the pressure inside the droplet. This can compensate the Laplace pressure, and the droplet
 attains a finite equilibrium radius even when the surrounding air is *undersaturated*, i.e. at a relative
-humidity $H_r < 100\%$.
+humidity $H_r$ below 100%.
 
 ### Model: binary square-well mixture
 
@@ -59,8 +59,8 @@ The Helmholtz free-energy functional is split into an exact ideal-gas part, a ha
 (RPA)** treatment of the square-well attractions:
 
 $$
-F_\mathrm{ex}[\rho_l,\rho_n] = F_\mathrm{hs}[\rho_l,\rho_n]
-+ \frac{1}{2} \sum_{i,j} \iint \rho_i(\mathbf{r}) \rho_j(\mathbf{r}') \phi^{(ij)}_\mathrm{sw}(|\mathbf{r}-\mathbf{r}'|) d\mathbf{r} d\mathbf{r}' .
+F_\mathrm{ex}[\rho_l,\rho_n] = F_\mathrm{hs}[\rho_l,\rho_n] +
+\frac{1}{2} \sum_{i,j} \iint \rho_i(\mathbf{r}) \rho_j(\mathbf{r}') \phi^{(ij)}_\mathrm{sw}(|\mathbf{r}-\mathbf{r}'|) d\mathbf{r} d\mathbf{r}' .
 $$
 
 With $\beta\varepsilon_{ll} = 1.2$ and $\lambda_{ll} = 1.5$ the pure SW fluid has liquid–vapour coexistence at
@@ -202,7 +202,7 @@ Model parameters are **compile-time constants** at the top of `sp_one.c`. Edit t
 
 | Macro | Meaning |
 |---|---|
-| `R` | Grid points per solvent hard-sphere radius (grid spacing $\Delta r = \sigma_l/(2R)$) |
+| `R` | Grid points per solvent hard-sphere radius (grid spacing $`\Delta r = \sigma_l/(2R)`$) |
 | `R2` | Grid points per nanoparticle radius; the size ratio is $q = \sigma_l/\sigma_n$ = `R/R2` (e.g. `R2 = 10*R` for a 10:1 droplet) |
 | `N` | Number of grid points; system radius $R_m$ = `N/(2R)` in units of $\sigma_l$ |
 | `eps1`, `lam1` | $\beta\varepsilon_{ll}$, $\lambda_{ll}$ (solvent–solvent) |

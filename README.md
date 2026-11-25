@@ -74,15 +74,49 @@ relative humidity of the environment,
 $$H_r = 100 \times \frac{P(\mu_0)}{P(\mu_c)} .$$
 
 The nanoparticles are non-volatile and are treated **canonically**, i.e. their number $N_n = \int \rho_n(\mathbf{r}) d\mathbf{r}$
-is held fixed. Minimising the grand potential under this constraint yields the Euler–Lagrange equations
+is held fixed. This constraint is enforced with a Lagrange multiplier $\mu_n$, which gives the semi-grand potential functional
+
+$$
+\Omega[\rho_l,\rho_n] = F[\rho_l,\rho_n] + \int \rho_l(\mathbf{r}) \left( V^{l}_\mathrm{ext}(\mathbf{r}) - \mu_0 \right) d\mathbf{r} + \int \rho_n(\mathbf{r}) V^{n}_\mathrm{ext}(\mathbf{r}) d\mathbf{r} - \mu_n \left( \int \rho_n(\mathbf{r}) d\mathbf{r} - N_n \right),
+$$
+
+with the intrinsic free energy $F = F_\mathrm{id} + F_\mathrm{ex}$ and the ideal-gas part
+
+$$
+F_\mathrm{id}[\rho_l,\rho_n] = k_B T \sum_{i=l,n} \int \rho_i(\mathbf{r}) \left( \ln\left(\Lambda_i^3 \rho_i(\mathbf{r})\right) - 1 \right) d\mathbf{r} .
+$$
+
+Setting $\delta\Omega/\delta\rho_l = \delta\Omega/\delta\rho_n = 0$ and $\partial\Omega/\partial\mu_n = 0$ gives
+
+$$
+\rho_l(r) = \Lambda_l^{-3} \exp\left( \beta\mu_0 + c_l^{(1)}(r) - \beta V^{l}_\mathrm{ext}(r) \right), \qquad
+\rho_n(r) = N_n \frac{\exp\left( c_n^{(1)}(r) - \beta V^{n}_\mathrm{ext}(r) \right)}{\int \exp\left( c_n^{(1)}(\mathbf{r}') - \beta V^{n}_\mathrm{ext}(\mathbf{r}') \right) d\mathbf{r}'} ,
+$$
+
+with the one-body direct correlation functions $c_i^{(1)} = -\delta\beta F_\mathrm{ex}/\delta\rho_i$. Assuming spherical
+symmetry, all density profiles are functions of the radial coordinate $r$ only. Without external potentials,
+and with the prefactors written in terms of reference bulk densities $\rho_i^{(0)}$, these become Eq. (13) of the paper:
 
 $$
 \rho_l(r) = \rho_l^{(0)} \exp\left(c_l^{(1)}(r) + \beta\mu_l\right), \qquad
-\rho_n(r) = \rho_n^{(0)} \exp\left(c_n^{(1)}(r)\right),
+\rho_n(r) = \rho_n^{(0)} \exp\left(c_n^{(1)}(r)\right).
 $$
 
-with the one-body direct correlation functions $c_i^{(1)} = -\delta\beta F_\mathrm{ex}/\delta\rho_i$.
-Assuming spherical symmetry, all density profiles are functions of the radial coordinate $r$ only.
+**What the Lagrange multiplier means.**
+
+* $\mu_n$ is *not* an input parameter. It is fixed by the constraint $\int \rho_n d\mathbf{r} = N_n$, which removes it
+  from the nanoparticle equation above: only the normalisation remains.
+* At the minimum, $\mu_n = \partial F/\partial N_n$ is the chemical potential of the nanoparticles. It has the same value
+  everywhere in the system, so the nanoparticles inside and outside the droplet are in chemical equilibrium
+  (the second condition of the thermodynamic model in Sec. II C of the paper).
+* The two components play different roles. The imposed $\mu_0$ lets solvent particles exchange with the
+  surrounding vapour, which is how the humidity enters. The constraint stops nanoparticles from being lost
+  to the vapour, as would happen if they were also treated grand canonically.
+* In the code the multiplier never appears explicitly. After each Picard or Ng update, $\rho_n$ is rescaled by
+  $N_n / \int \rho_n d\mathbf{r}$ (the `rho2[i] *= (double)Nn/c` lines in `sp_one.c`). This rescaling is exactly the
+  normalisation that $\mu_n$ imposes, so the arbitrary prefactor $\rho_n^{(0)}$ drops out.
+* The external potential $V^{n}_\mathrm{ext}$ is used only in the first stage of the minimisation below, where
+  it holds the nanoparticles together. In all other stages both external potentials are zero.
 
 ### Numerical minimisation
 

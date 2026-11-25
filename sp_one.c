@@ -719,7 +719,7 @@ void get_external_potential(double lrho) {
 
 void minimize() {
   
-  double hw = 0.0, hw_old = 1.0, hw_eps, c, dN, magn;
+  double hw = 1.0, hw_eps, c, dN, magn;
   double rho1_old[N], rho2_old[N];
   int i, j = 0, ITS = 250000;
 
@@ -733,9 +733,9 @@ void minimize() {
   for (i = 0; i <= Rn; i++) rho2[i] = rho02l;
   for (i = Rn+1; i < N-2*Rmax; i++) rho2[i] = 0.0;
   
-  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS)) {
+  while ((hw > hw_eps) && (j < ITS)) {
 
-    hw_old = hw;
+    hw = 0.0;
 
     weighted_densities();
 
@@ -767,7 +767,7 @@ void minimize() {
     if (j%PRINT_EVERY == 0) print_file(j);
 
     printf("\r%.2f %% ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 100.*j/ITS, get_magnitude(dphi),
-     fabs(hw-hw_old), magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);
+     hw, magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);
     fflush(stdout);
     
     j++;
@@ -781,7 +781,7 @@ void minimize() {
 
 void minimize_eff(double x, double b) {
 
-  double hw = 0.0, hw_old = 1.0, hw_eps, c, dN, magn, a, q, rl=Rb*dr, rn=Rn*dr;
+  double hw = 1.0, hw_eps, c, dN, magn, a, q, rl=Rb*dr, rn=Rn*dr;
   double c1, c2, a11, a22, a12, a01, a02, hr, dphi_max, dphi2_max;
   double rho1_old[N], rho2_old[N], rhon1[3][N], rhon2[3][N], dn1[3][N], dn2[3][N], d01[N], d02[N];
   int i, j = 0, k, ITS = 10000, ITS_picard = 1000, ITS_ng = 250000, xi = (int)(x/dr);
@@ -803,8 +803,8 @@ void minimize_eff(double x, double b) {
   for (i = 0; i <= Rn; i++) rho2[i] = rho02l;
   for (i = Rn+1; i < N-2*Rmax; i++) rho2[i] = 0.0; 
   
-  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS)) {
-    hw_old = hw;
+  while ((hw > hw_eps) && (j < ITS)) {
+    hw = 0.0;
     weighted_densities();
     derivative();
     #pragma omp parallel for private(i)
@@ -821,8 +821,7 @@ void minimize_eff(double x, double b) {
   }
   //============================================================
 
-  hw = 0.0;
-  hw_old = 1.0;
+  hw = 1.0;
   j = 0;
 
   //Stage 2: Now, minimize only the 1st component by keeping the density profile of the 2nd component constant. 
@@ -831,8 +830,8 @@ void minimize_eff(double x, double b) {
   for (i=0; i<Rb; i++) rho1[i] = rho1l;  
   for (i=Rb; i<N-2*Rmax; i++) rho1[i] = rho1v;  
 
-  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS)) {
-    hw_old = hw;
+  while ((hw > hw_eps) && (j < ITS)) {
+    hw = 0.0;
     weighted_densities();
     derivative();
     #pragma omp parallel for private(i)
@@ -847,18 +846,17 @@ void minimize_eff(double x, double b) {
   }
 //============================================================
 
-  hw = 0.0;
-  hw_old = 1.0;
+  hw = 1.0;
   j = 0;
 
   //Stage 3: Perform usual Picard-Iteration (or Ng version) of the pre-modified density profiles.
   // Herewith, the overall convergence against an equilibrium solution should be accelerated.
   //============================================================
   printf("Starting Picard-Iteration\n"); 
-  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS_picard)) {
+  while ((hw > hw_eps) && (j < ITS_picard)) {
   //while (get_magnitude(dphi) > 5.e-5) {
 
-    hw_old = hw;
+    hw = 0.0;
 
     weighted_densities();
 
@@ -895,8 +893,7 @@ void minimize_eff(double x, double b) {
   }
   //============================================================
 
-  hw = 0.0;
-  hw_old = 1.0;
+  hw = 1.0;
   j = 0;
 
   //Stage 4: Finally, perform Ng of the premodified density profiles.
@@ -904,10 +901,10 @@ void minimize_eff(double x, double b) {
   //============================================================
   printf("Starting Ng-algorithm\n"); 
 
-  while ((fabs(hw-hw_old) > hw_eps) && (j < ITS_ng)) {
+  while ((hw > hw_eps) && (j < ITS_ng)) {
 
     
-    hw_old = hw;
+    hw = 0.0;
     
     a2 = fac*exp(-get_magnitude(dep2));
 
@@ -993,7 +990,7 @@ void minimize_eff(double x, double b) {
       ++j;
 
       printf("\r%.2f %% ... %.2e ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 
-	100.*j/ITS_ng, dphi_max, dphi2_max, (hw-hw_old), magn, 0.5*rl, 0.5*rn, pi_4*fr2int(rho2, dr, (int)(rn/dr), 0.)/Nn);
+	100.*j/ITS_ng, dphi_max, dphi2_max, hw, magn, 0.5*rl, 0.5*rn, pi_4*fr2int(rho2, dr, (int)(rn/dr), 0.)/Nn);
       fflush(stdout);
     
   }
@@ -1009,7 +1006,7 @@ void minimize_eff(double x, double b) {
 
 void minimize_ng(double accuracy) {
   
-  double hw = 0.0, hw2 = 0.0, hw_old = 1.0, hw_old2 = 1.0, hw_eps, c, dN, magn;
+  double hw = 1.0, hw2 = 1.0, hw_eps, c, dN = 0., magn;
   double rho1_old[N], rho2_old[N], rhon1[3][N], rhon2[3][N], dn1[3][N], dn2[3][N], d01[N], d02[N];
   double c1, c2, a11, a22, a12, a01, a02, hr, dphi_max, dphi2_max;
   int i, j = 0, k, ITS = 250000;
@@ -1018,10 +1015,10 @@ void minimize_ng(double accuracy) {
 
   printf("\nBeginning Ng-Iteration\n");
 
-  while (((fabs(hw-hw_old) > hw_eps) || (fabs(hw2-hw_old2) > hw_eps)) && (j < ITS)) {
+  while (((hw > hw_eps) || (hw2 > hw_eps)) && (j < ITS)) {
 
-    hw_old = hw;
-    hw_old2 = hw2;
+    hw = 0.0;
+    hw2 = 0.0;
 
     weighted_densities();
 
@@ -1054,9 +1051,11 @@ void minimize_ng(double accuracy) {
 
       for (k=2; k>=0; k--) {
 
-        weighted_densities();
-
-        derivative();
+        /* k == 2 uses the evaluation done at the top of this iteration (same rho) */
+        if (k < 2) {
+          weighted_densities();
+          derivative();
+        }
 
         #pragma omp parallel for private(i)
         for (i=0; i<N-3*Rmax; i++) {
@@ -1130,7 +1129,7 @@ void minimize_ng(double accuracy) {
     if (j%PRINT_EVERY == 0) print_file(j);
 
     printf("\r%.2f %% ... %.2e ... %.2e ... %.2e ... %.4e ...  %.2f ... %.2f ... %.4f", 100.*j/ITS, dphi_max, dphi2_max,
-     fabs(hw-hw_old)+fabs(hw2-hw_old2), magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);
+     hw+hw2, magn, get_radius(rho1, 1)*dr/2., get_radius(rho2, 1)*dr/2., pi_4*fr2int(rho2, dr, get_radius(rho2, 1), 0.)/Nn);
     fflush(stdout);
 
     j++;
